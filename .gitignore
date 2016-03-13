@@ -1,0 +1,17 @@
+*.aps
+*.manifest
+*.pdb
+*.config
+![aA]pp.config
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.tlog
+*.lastbuildstate
+*.idb
+Release/
+Release_con/
+Debug/
+bin/
+obj/
