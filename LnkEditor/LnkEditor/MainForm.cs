@@ -24,7 +24,10 @@ namespace LnkEditor
             openState = "";
             var args = Environment.GetCommandLineArgs();
             if (args.Length >= 2)
-                openFile(args[1]);
+            {
+                convert(args[1]);
+                Application.Exit();
+            }
         }
 
         private void dataGridView1_KeyDown(object sender, KeyEventArgs e)
@@ -62,6 +65,57 @@ namespace LnkEditor
         {
             var files = (string[])e.Data.GetData(DataFormats.FileDrop);
             openFile(files[0]);
+        }
+
+        private void convertTxtToLnk(string src, string dest)
+        {
+            LnkFile lnk = new LnkFile();
+            lnk.lnkRecords = new ArrayList();
+            StreamReader file = new StreamReader(src);
+            while (!file.EndOfStream)
+            {
+                string line = file.ReadLine();
+                string[] record = line.Split('\t');
+                if (record.Length < 2)
+                    continue;
+
+                LnkRecord link = new LnkRecord();
+                link.child = record[0];
+                link.parent = record[1];
+                lnk.lnkRecords.Add(link);
+            }
+            file.Close();
+            lnk.save(dest);
+        }
+
+        private void convertLnkToTxt(string src, string dest)
+        {
+            LnkFile lnk = new LnkFile();
+            lnk.load(src);
+            StreamWriter file = new StreamWriter(dest);
+            for (int i = 0; i < lnk.lnkRecords.Count; i++)
+            {
+                var link = lnk.lnkRecords[i] as LnkRecord;
+                file.WriteLine(link.child + "\t" + link.parent);
+            }
+            file.Close();
+        }
+
+        private void convert(string filename)
+        {
+            try
+            {
+                filename = Path.GetFullPath(filename);
+                if (Path.GetExtension(filename).Equals(".txt", StringComparison.OrdinalIgnoreCase))
+                    convertTxtToLnk(filename, filename.Substring(0, filename.Length - 4));
+                else
+                    convertLnkToTxt(filename, filename + ".txt");
+            }
+            catch
+            {
+                MessageBox.Show(String.Format("Cannot convert file {0}!", filename), "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void setCurrentFile(string filename)
