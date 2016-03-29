@@ -1,7 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LnkEditor", "LnkEditor\LnkEditor.csproj", "{6CDA58B6-484A-4E73-88EE-ED2D7E292BFA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SetMenuPositions", "src\SetMenuPositions\SetMenuPositions.csproj", "{6CDA58B6-484A-4E73-88EE-ED2D7E292BFA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LnkEditor", "src\LnkEditor\LnkEditor.csproj", "{71E8F798-E2BA-4B12-9325-F4BDBBEA2ECB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,6 +15,10 @@ Global
 		{6CDA58B6-484A-4E73-88EE-ED2D7E292BFA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6CDA58B6-484A-4E73-88EE-ED2D7E292BFA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6CDA58B6-484A-4E73-88EE-ED2D7E292BFA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{71E8F798-E2BA-4B12-9325-F4BDBBEA2ECB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{71E8F798-E2BA-4B12-9325-F4BDBBEA2ECB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{71E8F798-E2BA-4B12-9325-F4BDBBEA2ECB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{71E8F798-E2BA-4B12-9325-F4BDBBEA2ECB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
