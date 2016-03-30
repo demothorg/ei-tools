@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<RuleSet Name="eilib" ToolsVersion="14.0">
+  <Include Path="allrules.ruleset" Action="Default" />
+  <Rules AnalyzerId="Microsoft.Analyzers.ManagedCodeAnalysis" RuleNamespace="Microsoft.Rules.Managed">
+    <Rule Id="CA2122" Action="None" />
+  </Rules>
+  <Rules AnalyzerId="StyleCop.Analyzers" RuleNamespace="StyleCop.Analyzers">
+    <Rule Id="SA1025" Action="None" />
+    <Rule Id="SA1117" Action="None" />
+    <Rule Id="SA1127" Action="None" />
+    <Rule Id="SA1129" Action="None" />
+    <Rule Id="SA1200" Action="None" />
+    <Rule Id="SA1503" Action="None" />
+    <Rule Id="SA1633" Action="None" />
+    <Rule Id="SA1649" Action="None" />
+    <Rule Id="SA1652" Action="None" />
+  </Rules>
+</RuleSet>
