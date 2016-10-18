@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Windows.Forms;
-
+using EILib;
 namespace LnkEditor
 {
     public partial class MainForm : Form
@@ -70,7 +68,6 @@ namespace LnkEditor
         private void convertTxtToLnk(string src, string dest)
         {
             LnkFile lnk = new LnkFile();
-            lnk.lnkRecords = new ArrayList();
             StreamReader file = new StreamReader(src);
             while (!file.EndOfStream)
             {
@@ -80,23 +77,23 @@ namespace LnkEditor
                     continue;
 
                 LnkRecord link = new LnkRecord();
-                link.child = record[0];
-                link.parent = record[1];
-                lnk.lnkRecords.Add(link);
+                link.Child = record[0];
+                link.Parent = record[1];
+                lnk.Records.Add(link);
             }
             file.Close();
-            lnk.save(dest);
+            lnk.Save(dest);
         }
 
         private void convertLnkToTxt(string src, string dest)
         {
             LnkFile lnk = new LnkFile();
-            lnk.load(src);
+            lnk.Load(src);
             StreamWriter file = new StreamWriter(dest);
-            for (int i = 0; i < lnk.lnkRecords.Count; i++)
+            for (int i = 0; i < lnk.Records.Count; i++)
             {
-                var link = lnk.lnkRecords[i] as LnkRecord;
-                file.WriteLine(link.child + "\t" + link.parent);
+                var link = lnk.Records[i] as LnkRecord;
+                file.WriteLine(link.Child + "\t" + link.Parent);
             }
             file.Close();
         }
@@ -169,11 +166,11 @@ namespace LnkEditor
             try
             {
                 LnkFile lnk = new LnkFile();
-                lnk.load(filename);
-                for (int i = 0; i < lnk.lnkRecords.Count; i++)
+                lnk.Load(filename);
+                for (int i = 0; i < lnk.Records.Count; i++)
                 {
-                    var link = lnk.lnkRecords[i] as LnkRecord;
-                    newRows.Add(new object[] { link.child, link.parent });
+                    var link = lnk.Records[i] as LnkRecord;
+                    newRows.Add(new object[] { link.Child, link.Parent });
                 }
                 dataGridView1.Rows.Clear();
                 foreach (var row in newRows)
@@ -191,7 +188,6 @@ namespace LnkEditor
         private void saveFileAs(string filename)
         {
             LnkFile lnk = new LnkFile();
-            lnk.lnkRecords = new ArrayList();
             for (int i = 0; i < dataGridView1.Rows.Count; i++)
             {
                 var row = dataGridView1.Rows[i];
@@ -206,14 +202,14 @@ namespace LnkEditor
                     continue;
 
                 LnkRecord link = new LnkRecord();
-                link.child = child;
-                link.parent = parent;
-                lnk.lnkRecords.Add(link);
+                link.Child = child;
+                link.Parent = parent;
+                lnk.Records.Add(link);
             }
 
             try
             {
-                lnk.save(filename);
+                lnk.Save(filename);
                 setCurrentFile(filename);
             }
             catch
@@ -272,75 +268,6 @@ namespace LnkEditor
             catch { }
 
             checkCellsState();
-        }
-    }
-
-    public class LnkFile
-    {
-        public ArrayList lnkRecords;
-        public void load(string path)
-        {
-            FileStream fs = File.Open(path, FileMode.Open);
-            BinaryReader reader = new BinaryReader(fs);
-            lnkRecords = new ArrayList();
-            UInt32 linksCount = reader.ReadUInt32();
-            for (int i = 0; i < linksCount; i++)
-            {
-                LnkRecord link = new LnkRecord();
-                link.load(reader);
-                lnkRecords.Add(link);
-            }
-            reader.Close();
-        }
-        public void save(string path)
-        {
-            FileStream fs = File.Open(path, FileMode.Create);
-            BinaryWriter writer = new BinaryWriter(fs);
-            writer.Write((UInt32)lnkRecords.Count);
-            for (int i = 0; i < lnkRecords.Count; i++)
-            {
-                LnkRecord link = lnkRecords[i] as LnkRecord;
-                link.save(writer);
-            }
-            writer.Close();
-        }
-    }
-
-    public class LnkRecord
-    {
-        public string child;
-        public string parent;
-        public void load(BinaryReader reader)
-        {
-            var encoding = Encoding.GetEncoding(1251);
-            child = encoding.GetString(reader.ReadBytes(reader.ReadInt32()));
-            parent = encoding.GetString(reader.ReadBytes(reader.ReadInt32()));
-            if (child.Length > 0 && child[child.Length - 1] == '\0')
-                child = child.Substring(0, child.Length - 1);
-            if (parent.Length > 0 && parent[parent.Length - 1] == '\0')
-                parent = parent.Substring(0, parent.Length - 1);
-        }
-        public void save(BinaryWriter writer)
-        {
-            var encoding = Encoding.GetEncoding(1251);
-
-            if (child.Length > 0)
-            {
-                writer.Write((Int32)child.Length + 1);
-                writer.Write(encoding.GetBytes(child));
-                writer.Write((byte)0);
-            }
-            else
-                writer.Write((Int32)0);
-
-            if (parent.Length > 0)
-            {
-                writer.Write((Int32)parent.Length + 1);
-                writer.Write(encoding.GetBytes(parent));
-                writer.Write((byte)0);
-            }
-            else
-                writer.Write((Int32)0);
         }
     }
 }
