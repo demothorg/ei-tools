@@ -47,6 +47,7 @@
     <Compile Include="ResFile.cs" />
     <Compile Include="ResFileFormat.cs" />
     <Compile Include="ResFileHelper.cs" />
+    <Compile Include="Types.cs" />
     <Compile Include="Utility.cs" />
   </ItemGroup>
   <ItemGroup>

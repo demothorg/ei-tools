@@ -136,68 +136,121 @@ namespace EILib
             return stream.ToArray();
         }
 
-        public void SetString(string text)
+        private void CheckType(params ESectionType[] types)
         {
-            var encoding = Encoding.GetEncoding(1251);
-            switch (Type)
+            foreach (var type in types)
             {
-                case ESectionType.String:
-                    _data = encoding.GetBytes(text);
-                    break;
-
-                case ESectionType.StringEncrypted:
-                    EncryptString(text, ref _data);
-                    break;
+                if (type != Type)
+                    throw new InvalidOperationException();
             }
         }
 
-        public string GetString()
+        public string ValString
         {
-            switch (Type)
+            get
             {
-                case ESectionType.String:
+                CheckType(ESectionType.String, ESectionType.StringEncrypted);
+                if (Type == ESectionType.String)
                     return Encoding.GetEncoding(1251).GetString(_data, 0, _data.Length);
-
-                case ESectionType.StringEncrypted:
+                else
                     return DecryptString(_data);
             }
-
-            return "";
-        }
-
-        public void SetNumber(double value)
-        {
-            switch (Type)
+            set
             {
-                case ESectionType.Byte:
-                    _data[0] = Convert.ToByte(value);
-                    break;
-
-                case ESectionType.Dword:
-                    BitConverter.GetBytes(Convert.ToUInt32(value)).CopyTo(_data, 0);
-                    break;
-
-                case ESectionType.Float:
-                    BitConverter.GetBytes(Convert.ToSingle(value)).CopyTo(_data, 0);
-                    break;
+                CheckType(ESectionType.String, ESectionType.StringEncrypted);
+                if (Type == ESectionType.String)
+                    _data = Encoding.GetEncoding(1251).GetBytes(value);
+                else
+                    EncryptString(value, ref _data);
             }
         }
 
-        public double GetNumber()
+        public byte ValByte
         {
-            switch (Type)
+            get
             {
-                case ESectionType.Byte:
-                    return _data[0];
-
-                case ESectionType.Dword:
-                    return BitConverter.ToUInt32(_data, 0);
-
-                case ESectionType.Float:
-                    return BitConverter.ToSingle(_data, 0);
+                CheckType(ESectionType.Byte);
+                return _data[0];
             }
+            set
+            {
+                CheckType(ESectionType.Byte);
+                _data = new byte[] { value };
+            }
+        }
 
-            return double.NaN;
+        public uint ValDword
+        {
+            get
+            {
+                CheckType(ESectionType.Dword);
+                return BitConverter.ToUInt32(_data, 0);
+            }
+            set
+            {
+                CheckType(ESectionType.Dword);
+                _data = BitConverter.GetBytes(Convert.ToUInt32(value));
+            }
+        }
+
+        public float ValFloat
+        {
+            get
+            {
+                CheckType(ESectionType.Float);
+                return BitConverter.ToSingle(_data, 0);
+            }
+            set
+            {
+                CheckType(ESectionType.Float);
+                _data = BitConverter.GetBytes(Convert.ToSingle(value));
+            }
+        }
+
+        public Plot ValPlot
+        {
+            get
+            {
+                CheckType(ESectionType.Plot);
+                return new Plot()
+                {
+                    X = BitConverter.ToSingle(_data, 0),
+                    Y = BitConverter.ToSingle(_data, 4),
+                    Z = BitConverter.ToSingle(_data, 8)
+                };
+            }
+            set
+            {
+                CheckType(ESectionType.Plot);
+                _data = new byte[12];
+                BitConverter.GetBytes(Convert.ToSingle(value.X)).CopyTo(_data, 0);
+                BitConverter.GetBytes(Convert.ToSingle(value.Y)).CopyTo(_data, 4);
+                BitConverter.GetBytes(Convert.ToSingle(value.Z)).CopyTo(_data, 8);
+            }
+        }
+
+        public Quaternion ValQuaternion
+        {
+            get
+            {
+                CheckType(ESectionType.Quaternion);
+                return new Quaternion()
+                {
+                    W = BitConverter.ToSingle(_data, 0),
+                    X = BitConverter.ToSingle(_data, 4),
+                    Y = BitConverter.ToSingle(_data, 8),
+                    Z = BitConverter.ToSingle(_data, 12)
+                };
+            }
+            set
+            {
+                CheckType(ESectionType.Quaternion);
+                _data = new byte[16];
+                BitConverter.GetBytes(Convert.ToSingle(value.W)).CopyTo(_data, 0);
+                BitConverter.GetBytes(Convert.ToSingle(value.X)).CopyTo(_data, 4);
+                BitConverter.GetBytes(Convert.ToSingle(value.Y)).CopyTo(_data, 8);
+                BitConverter.GetBytes(Convert.ToSingle(value.Z)).CopyTo(_data, 12);
+            }
         }
 
         private MobFileSection()
