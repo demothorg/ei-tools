@@ -82,15 +82,7 @@ namespace EILib
             {
                 using (var res = new ResFile(f))
                 {
-                    string zoneName = Path.GetFileNameWithoutExtension(path);
-
-                    Materials[1].A = 1;
-                    Materials[1].R = 1;
-                    Materials[1].G = 1;
-                    Materials[1].B = 1;
-
                     var mpFile = new MpFile();
-
                     mpFile.Materials = new MpMaterial[Materials.Length];
                     for (int i = 0; i < Materials.Length; i++)
                         mpFile.Materials[i] = Materials[i].ToMpMaterial();
@@ -115,6 +107,7 @@ namespace EILib
                         AnimTilesCount = (uint)this.AnimTiles.Length
                     };
 
+                    string zoneName = Path.GetFileNameWithoutExtension(path);
                     res.AddFile(zoneName + ".mp", DateTime.Now);
                     SaveMpFile(f, mpFile);
 
