@@ -8,16 +8,35 @@ namespace EILib
 {
     public class MobFileSection
     {
-        public ESectionId Id { get; private set; }
+        public ESectionId Id
+        {
+            get
+            {
+                return _id;
+            }
+            set
+            {
+                _id = value;
+                if (Type == ESectionType.Record)
+                {
+                    Items = new List<MobFileSection>();
+                    _data = null;
+                }
+                else
+                {
+                    Items = null;
+                    if (_data == null)
+                        _data = new byte[0];
+                }
+            }
+        }
 
         public ESectionType Type
         {
             get
             {
-                if (Id == ESectionId.UNKNOWN && Owner == null)
-                    return ESectionType.Record;
-                else if (_sectionInfos.ContainsKey(Id))
-                    return _sectionInfos[Id].Type;
+                if (_sectionInfos.ContainsKey(_id))
+                    return _sectionInfos[_id].Type;
                 else
                     return ESectionType.Unknown;
             }
@@ -44,64 +63,72 @@ namespace EILib
 
         public MobFileSection Owner;
         public List<MobFileSection> Items { get; private set; }
+        private ESectionId _id;
         private byte[] _data;
 
-        public MobFileSection(byte[] data, MobFileSection owner)
-            : this()
+        public MobFileSection(ESectionId id, MobFileSection owner = null)
         {
-            InitSection(data, owner);
+            Id = id;
+            Owner = owner;
+        }
+
+        internal MobFileSection(byte[] data, MobFileSection owner)
+            : this(ESectionId.UNKNOWN, owner)
+        {
+            if (data == null)
+                throw new ArgumentNullException("data");
+
+            if (data.Length < 8)
+                throw new ArgumentException("Invalid data", "data");
+
+            if (owner == null)
+            {
+                // Root section. Record without header
+                _id = ESectionId.ROOT;
+                _data = (byte[])data.Clone();
+            }
+            else
+            {
+                uint id = BitConverter.ToUInt32(data, 0);
+                uint size = BitConverter.ToUInt32(data, 4);
+                if (size > data.Length)
+                    throw new ArgumentException("Invalid data", "data");
+
+                _data = new byte[size - 8];
+                Array.Copy(data, 8, _data, 0, _data.Length);
+                _id = (ESectionId)id;
+            }
+
             if (Type == ESectionType.Record)
                 ReadSubsections();
         }
 
-        // Crypt/decrypt for raw byte array
-        public static void CryptData(byte[] src)
-        {
-            uint tmpKey, i, key = BitConverter.ToUInt32(src, 0);
-            for (i = 4; i < src.Length; i++)
-            {
-                tmpKey = ((((key * 13) << 4) + key) << 8) - key;
-                key += (tmpKey << 2) + 2531011;
-                tmpKey = key >> 16;
-                src[i] ^= (byte)tmpKey;
-            }
-        }
-
-        public static void EncryptString(string src, ref byte[] dest)
-        {
-            var data = Encoding.GetEncoding(1251).GetBytes(src);
-            Array.Resize(ref dest, data.Length + 4);
-            data.CopyTo(dest, 4);
-            CryptData(dest);
-        }
-
-        public static string DecryptString(byte[] src)
-        {
-            var tmp = (byte[])src.Clone();
-            CryptData(tmp);
-            return Encoding.GetEncoding(1251).GetString(tmp, 4, tmp.Length - 4);
-        }
-
         public MobFileSection Clone(MobFileSection owner = null)
         {
-            var result = new MobFileSection()
-            {
-                Owner = owner,
-                Id = this.Id
-            };
+            var result = new MobFileSection(_id, owner);
 
+            // Simple section (not record). Just copy the data
             if (_data != null)
             {
                 result._data = (byte[])_data.Clone();
                 return result;
             }
 
+            // Record section
             Debug.Assert(Items != null && Type == ESectionType.Record);
             result.Items = new List<MobFileSection>();
             foreach (var i in Items)
                 result.Items.Add(i.Clone(result));
 
             return result;
+        }
+
+        public void SetData(byte[] data)
+        {
+            Items = null;
+            _data = (byte[])data.Clone();
+            if (Type == ESectionType.Record)
+                ReadSubsections();
         }
 
         public byte[] GetData()
@@ -136,13 +163,43 @@ namespace EILib
             return stream.ToArray();
         }
 
+        // Crypt/decrypt for raw byte array
+        private static void CryptData(byte[] src)
+        {
+            uint tmpKey, i, key = BitConverter.ToUInt32(src, 0);
+            for (i = 4; i < src.Length; i++)
+            {
+                tmpKey = ((((key * 13) << 4) + key) << 8) - key;
+                key += (tmpKey << 2) + 2531011;
+                tmpKey = key >> 16;
+                src[i] ^= (byte)tmpKey;
+            }
+        }
+
+        private static void EncryptString(string src, ref byte[] dest)
+        {
+            var data = Encoding.GetEncoding(1251).GetBytes(src);
+            Array.Resize(ref dest, data.Length + 4);
+            data.CopyTo(dest, 4);
+            CryptData(dest);
+        }
+
+        private static string DecryptString(byte[] src)
+        {
+            var tmp = (byte[])src.Clone();
+            CryptData(tmp);
+            return Encoding.GetEncoding(1251).GetString(tmp, 4, tmp.Length - 4);
+        }
+
         private void CheckType(params ESectionType[] types)
         {
             foreach (var type in types)
             {
-                if (type != Type)
-                    throw new InvalidOperationException();
+                if (type == Type)
+                    return;
             }
+
+            throw new InvalidOperationException();
         }
 
         public string ValString
@@ -253,13 +310,6 @@ namespace EILib
             }
         }
 
-        private MobFileSection()
-        {
-            Items = null;
-            Owner = null;
-            Id = ESectionId.UNKNOWN;
-        }
-
         private static Dictionary<ESectionId, SectionInfo> PrepareSectionDicionary()
         {
             var result = new Dictionary<ESectionId, SectionInfo>();
@@ -269,38 +319,10 @@ namespace EILib
             return result;
         }
 
-        private void InitSection(byte[] data, MobFileSection owner)
-        {
-            if (data == null)
-                throw new ArgumentNullException("data");
-
-            if (data.Length < 8)
-                throw new ArgumentException("Invalid data", "data");
-
-            Items = null;
-            Owner = owner;
-            Id = ESectionId.UNKNOWN;
-            if (owner == null)
-            {
-                // Root section. Record without header
-                _data = (byte[])data.Clone();
-                return;
-            }
-
-            uint id = BitConverter.ToUInt32(data, 0);
-            uint size = BitConverter.ToUInt32(data, 4);
-            if (size > data.Length)
-                throw new ArgumentException("Invalid data", "data");
-
-            _data = new byte[size - 8];
-            Array.Copy(data, 8, _data, 0, _data.Length);
-            Id = (ESectionId)id;
-        }
-
         private void ReadSubsections()
         {
-            if (Items != null)
-                return; // Already readed
+            if (_data == null)
+                return; // Empty or already readed
 
             if (Type != ESectionType.Record)
                 throw new InvalidOperationException();
@@ -332,12 +354,10 @@ namespace EILib
         {
             public ESectionId Id { get; private set; }
             public ESectionType Type { get; private set; }
-            public string Name { get; private set; }
-            public SectionInfo(ESectionId id, ESectionType type, string name)
+            public SectionInfo(ESectionId id, ESectionType type)
             {
                 Id = id;
                 Type = type;
-                Name = name;
             }
         }
 
@@ -349,159 +369,161 @@ namespace EILib
         private static Dictionary<ESectionId, SectionInfo> _sectionInfos;
         private static SectionInfo[] _knownSections = new SectionInfo[]
         {
-            new SectionInfo(ESectionId.UNKNOWN, ESectionType.Unknown, ""),
-            new SectionInfo(ESectionId.WORLD_SET, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.OBJ_DEF_LOGIC, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.PR_OBJECTDBFILE, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.DIR_NAME, ESectionType.String, ""),
-            new SectionInfo(ESectionId.DIPLOMATION, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.WS_WIND_DIR, ESectionType.Plot, ""),
-            new SectionInfo(ESectionId.OBJECTSECTION, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.OBJROTATION, ESectionType.Quaternion, ""),
-            new SectionInfo(ESectionId.OBJ_PLAYER, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.DIR_NINST, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.DIPLOMATION_FOF, ESectionType.Diplomacy, ""),
-            new SectionInfo(ESectionId.OBJECTDBFILE, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.LIGHT_SECTION, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.WS_WIND_STR, ESectionType.Float, ""),
-            new SectionInfo(ESectionId.OBJECT, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.OBJTEXTURE, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.OBJ_PARENT_ID, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.SOUND_SECTION, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.SOUND_RESNAME, ESectionType.StringArray, ""),
-            new SectionInfo(ESectionId.PARTICL_SECTION, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.DIR_PARENT_FOLDER, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.SEC_RANGE, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.DIPLOMATION_PL_NAMES, ESectionType.StringArray, ""),
-            new SectionInfo(ESectionId.LIGHT, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.WS_TIME, ESectionType.Float, ""),
-            new SectionInfo(ESectionId.NID, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.OBJCOMPLECTION, ESectionType.Plot, ""),
-            new SectionInfo(ESectionId.OBJ_USE_IN_SCRIPT, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.SOUND, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.SOUND_RANGE2, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.PARTICL, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.DIR_TYPE, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.MAIN_RANGE, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.VSS_BS_COMMANDS, ESectionType.StringArray, ""),
-            new SectionInfo(ESectionId.LIGHT_RANGE, ESectionType.Float, ""),
-            new SectionInfo(ESectionId.WS_AMBIENT, ESectionType.Float, ""),
-            new SectionInfo(ESectionId.OBJTYPE, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.OBJBODYPARTS, ESectionType.StringArray, ""),
-            new SectionInfo(ESectionId.OBJ_IS_SHADOW, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.SOUND_ID, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.PARTICL_ID, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.RANGE, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.VSS_SECTION, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.VSS_ISSTART, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.VSS_CUSTOM_SRIPT, ESectionType.String, ""),
-            new SectionInfo(ESectionId.LIGHT_NAME, ESectionType.String, ""),
-            new SectionInfo(ESectionId.WS_SUN_LIGHT, ESectionType.Float, ""),
-            new SectionInfo(ESectionId.OBJNAME, ESectionType.String, ""),
-            new SectionInfo(ESectionId.PARENTTEMPLATE, ESectionType.String, ""),
-            new SectionInfo(ESectionId.OBJ_R, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.SOUND_POSITION, ESectionType.Plot, ""),
-            new SectionInfo(ESectionId.SOUND_AMBIENT, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.PARTICL_POSITION, ESectionType.Plot, ""),
-            new SectionInfo(ESectionId.UNIT, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.UNIT_NEED_IMPORT, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.VSS_TRIGER, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.VSS_LINK, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.LIGHT_POSITION, ESectionType.Plot, ""),
-            new SectionInfo(ESectionId.OBJINDEX, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.OBJCOMMENTS, ESectionType.String, ""),
-            new SectionInfo(ESectionId.OBJ_QUEST_INFO, ESectionType.String, ""),
-            new SectionInfo(ESectionId.SOUND_RANGE, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.SOUND_IS_MUSIC, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.PARTICL_COMMENTS, ESectionType.String, ""),
-            new SectionInfo(ESectionId.MAGIC_TRAP, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.UNIT_R, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_WAIT, ESectionType.Float, ""),
-            new SectionInfo(ESectionId.VSS_CHECK, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.VSS_GROUP, ESectionType.String, ""),
-            new SectionInfo(ESectionId.LIGHT_ID, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.OBJTEMPLATE, ESectionType.String, ""),
-            new SectionInfo(ESectionId.SOUND_NAME, ESectionType.String, ""),
-            new SectionInfo(ESectionId.PARTICL_NAME, ESectionType.String, ""),
-            new SectionInfo(ESectionId.MIN_ID, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.MT_DIPLOMACY, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.LEVER, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.UNIT_PROTOTYPE, ESectionType.String, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_AGRESSIV, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_ALARM_CONDITION, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.GUARD_PT, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.VSS_PATH, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.VSS_IS_USE_GROUP, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.LIGHT_SHADOW, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.OBJPRIMTXTR, ESectionType.String, ""),
-            new SectionInfo(ESectionId.SOUND_MIN, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.PARTICL_TYPE, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.MAX_ID, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.MT_SPELL, ESectionType.String, ""),
-            new SectionInfo(ESectionId.LEVER_SCIENCE_STATS, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.UNIT_ITEMS, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_CYCLIC, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_HELP, ESectionType.Float, ""),
-            new SectionInfo(ESectionId.GUARD_PT_POSITION, ESectionType.Plot, ""),
-            new SectionInfo(ESectionId.ACTION_PT, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.VSS_ID, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.VSS_VARIABLE, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.LIGHT_COLOR, ESectionType.Plot, ""),
-            new SectionInfo(ESectionId.OBJSECTXTR, ESectionType.String, ""),
-            new SectionInfo(ESectionId.SOUND_MAX, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.PARTICL_SCALE, ESectionType.Float, ""),
-            new SectionInfo(ESectionId.AIGRAPH, ESectionType.AiGraph, ""),
-            new SectionInfo(ESectionId.MT_AREAS, ESectionType.AreaArray, ""),
-            new SectionInfo(ESectionId.LEVER_CUR_STATE, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.UNIT_STATS, ESectionType.UnitStats, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_MODEL, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_ALWAYS_ACTIVE, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.GUARD_PT_ACTION, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.ACTION_PT_LOOK_PT, ESectionType.Plot, ""),
-            new SectionInfo(ESectionId.TORCH, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.VSS_RECT, ESectionType.Rectangle, ""),
-            new SectionInfo(ESectionId.VSS_BS_CHECK, ESectionType.StringArray, ""),
-            new SectionInfo(ESectionId.LIGHT_COMMENTS, ESectionType.String, ""),
-            new SectionInfo(ESectionId.OBJPOSITION, ESectionType.Plot, ""),
-            new SectionInfo(ESectionId.SOUND_COMMENTS, ESectionType.String, ""),
-            new SectionInfo(ESectionId.MT_TARGETS, ESectionType.Plot2DArray, ""),
-            new SectionInfo(ESectionId.LEVER_TOTAL_STATE, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.UNIT_QUEST_ITEMS, ESectionType.StringArray, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_GUARD_R, ESectionType.Float, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_AGRESSION_MODE, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.ACTION_PT_WAIT_SEG, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.TORCH_STRENGHT, ESectionType.Float, ""),
-            new SectionInfo(ESectionId.VSS_SRC_ID, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.SOUND_VOLUME, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.MT_CAST_INTERVAL, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.LEVER_IS_CYCLED, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.UNIT_QUICK_ITEMS, ESectionType.StringArray, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_GUARD_PT, ESectionType.Plot, ""),
-            new SectionInfo(ESectionId.ACTION_PT_TURN_SPEED, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.TORCH_PTLINK, ESectionType.Plot, ""),
-            new SectionInfo(ESectionId.VSS_DST_ID, ESectionType.Dword, ""),
-            new SectionInfo(ESectionId.LEVER_CAST_ONCE, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.UNIT_SPELLS, ESectionType.StringArray, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_NALARM, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.ACTION_PT_FLAGS, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.TORCH_SOUND, ESectionType.String, ""),
-            new SectionInfo(ESectionId.VSS_TITLE, ESectionType.String, ""),
-            new SectionInfo(ESectionId.LEVER_SCIENCE_STATS_NEW, ESectionType.LeverStats, ""),
-            new SectionInfo(ESectionId.UNIT_WEAPONS, ESectionType.StringArray, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_USE, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.VSS_COMMANDS, ESectionType.String, ""),
-            new SectionInfo(ESectionId.DIRICTORY_ELEMENTS, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.LEVER_IS_DOOR, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.UNIT_ARMORS, ESectionType.StringArray, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_REVENGE, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.DIRICTORY, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.SS_TEXT_OLD, ESectionType.String, ""),
-            new SectionInfo(ESectionId.LEVER_RECALC_GRAPH, ESectionType.Byte, ""),
-            new SectionInfo(ESectionId.UNIT_LOGIC_FEAR, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.SC_OBJECTDBFILE, ESectionType.Null, ""),
-            new SectionInfo(ESectionId.FOLDER, ESectionType.Record, ""),
-            new SectionInfo(ESectionId.SS_TEXT, ESectionType.StringEncrypted, "")
+            new SectionInfo(ESectionId.UNKNOWN, ESectionType.Unknown),
+            new SectionInfo(ESectionId.ROOT, ESectionType.Record),
+
+            new SectionInfo(ESectionId.WORLD_SET, ESectionType.Record),
+            new SectionInfo(ESectionId.OBJ_DEF_LOGIC, ESectionType.Null),
+            new SectionInfo(ESectionId.PR_OBJECTDBFILE, ESectionType.Null),
+            new SectionInfo(ESectionId.DIR_NAME, ESectionType.String),
+            new SectionInfo(ESectionId.DIPLOMATION, ESectionType.Record),
+            new SectionInfo(ESectionId.WS_WIND_DIR, ESectionType.Plot),
+            new SectionInfo(ESectionId.OBJECTSECTION, ESectionType.Record),
+            new SectionInfo(ESectionId.OBJROTATION, ESectionType.Quaternion),
+            new SectionInfo(ESectionId.OBJ_PLAYER, ESectionType.Byte),
+            new SectionInfo(ESectionId.DIR_NINST, ESectionType.Dword),
+            new SectionInfo(ESectionId.DIPLOMATION_FOF, ESectionType.Diplomacy),
+            new SectionInfo(ESectionId.OBJECTDBFILE, ESectionType.Record),
+            new SectionInfo(ESectionId.LIGHT_SECTION, ESectionType.Null),
+            new SectionInfo(ESectionId.WS_WIND_STR, ESectionType.Float),
+            new SectionInfo(ESectionId.OBJECT, ESectionType.Record),
+            new SectionInfo(ESectionId.OBJTEXTURE, ESectionType.Null),
+            new SectionInfo(ESectionId.OBJ_PARENT_ID, ESectionType.Dword),
+            new SectionInfo(ESectionId.SOUND_SECTION, ESectionType.Null),
+            new SectionInfo(ESectionId.SOUND_RESNAME, ESectionType.StringArray),
+            new SectionInfo(ESectionId.PARTICL_SECTION, ESectionType.Null),
+            new SectionInfo(ESectionId.DIR_PARENT_FOLDER, ESectionType.Dword),
+            new SectionInfo(ESectionId.SEC_RANGE, ESectionType.Record),
+            new SectionInfo(ESectionId.DIPLOMATION_PL_NAMES, ESectionType.StringArray),
+            new SectionInfo(ESectionId.LIGHT, ESectionType.Record),
+            new SectionInfo(ESectionId.WS_TIME, ESectionType.Float),
+            new SectionInfo(ESectionId.NID, ESectionType.Dword),
+            new SectionInfo(ESectionId.OBJCOMPLECTION, ESectionType.Plot),
+            new SectionInfo(ESectionId.OBJ_USE_IN_SCRIPT, ESectionType.Byte),
+            new SectionInfo(ESectionId.SOUND, ESectionType.Record),
+            new SectionInfo(ESectionId.SOUND_RANGE2, ESectionType.Dword),
+            new SectionInfo(ESectionId.PARTICL, ESectionType.Record),
+            new SectionInfo(ESectionId.DIR_TYPE, ESectionType.Byte),
+            new SectionInfo(ESectionId.MAIN_RANGE, ESectionType.Record),
+            new SectionInfo(ESectionId.VSS_BS_COMMANDS, ESectionType.StringArray),
+            new SectionInfo(ESectionId.LIGHT_RANGE, ESectionType.Float),
+            new SectionInfo(ESectionId.WS_AMBIENT, ESectionType.Float),
+            new SectionInfo(ESectionId.OBJTYPE, ESectionType.Dword),
+            new SectionInfo(ESectionId.OBJBODYPARTS, ESectionType.StringArray),
+            new SectionInfo(ESectionId.OBJ_IS_SHADOW, ESectionType.Byte),
+            new SectionInfo(ESectionId.SOUND_ID, ESectionType.Dword),
+            new SectionInfo(ESectionId.PARTICL_ID, ESectionType.Dword),
+            new SectionInfo(ESectionId.RANGE, ESectionType.Record),
+            new SectionInfo(ESectionId.VSS_SECTION, ESectionType.Record),
+            new SectionInfo(ESectionId.VSS_ISSTART, ESectionType.Byte),
+            new SectionInfo(ESectionId.VSS_CUSTOM_SRIPT, ESectionType.String),
+            new SectionInfo(ESectionId.LIGHT_NAME, ESectionType.String),
+            new SectionInfo(ESectionId.WS_SUN_LIGHT, ESectionType.Float),
+            new SectionInfo(ESectionId.OBJNAME, ESectionType.String),
+            new SectionInfo(ESectionId.PARENTTEMPLATE, ESectionType.String),
+            new SectionInfo(ESectionId.OBJ_R, ESectionType.Null),
+            new SectionInfo(ESectionId.SOUND_POSITION, ESectionType.Plot),
+            new SectionInfo(ESectionId.SOUND_AMBIENT, ESectionType.Byte),
+            new SectionInfo(ESectionId.PARTICL_POSITION, ESectionType.Plot),
+            new SectionInfo(ESectionId.UNIT, ESectionType.Record),
+            new SectionInfo(ESectionId.UNIT_NEED_IMPORT, ESectionType.Byte),
+            new SectionInfo(ESectionId.VSS_TRIGER, ESectionType.Record),
+            new SectionInfo(ESectionId.VSS_LINK, ESectionType.Record),
+            new SectionInfo(ESectionId.LIGHT_POSITION, ESectionType.Plot),
+            new SectionInfo(ESectionId.OBJINDEX, ESectionType.Null),
+            new SectionInfo(ESectionId.OBJCOMMENTS, ESectionType.String),
+            new SectionInfo(ESectionId.OBJ_QUEST_INFO, ESectionType.String),
+            new SectionInfo(ESectionId.SOUND_RANGE, ESectionType.Dword),
+            new SectionInfo(ESectionId.SOUND_IS_MUSIC, ESectionType.Byte),
+            new SectionInfo(ESectionId.PARTICL_COMMENTS, ESectionType.String),
+            new SectionInfo(ESectionId.MAGIC_TRAP, ESectionType.Record),
+            new SectionInfo(ESectionId.UNIT_R, ESectionType.Null),
+            new SectionInfo(ESectionId.UNIT_LOGIC, ESectionType.Record),
+            new SectionInfo(ESectionId.UNIT_LOGIC_WAIT, ESectionType.Float),
+            new SectionInfo(ESectionId.VSS_CHECK, ESectionType.Record),
+            new SectionInfo(ESectionId.VSS_GROUP, ESectionType.String),
+            new SectionInfo(ESectionId.LIGHT_ID, ESectionType.Dword),
+            new SectionInfo(ESectionId.OBJTEMPLATE, ESectionType.String),
+            new SectionInfo(ESectionId.SOUND_NAME, ESectionType.String),
+            new SectionInfo(ESectionId.PARTICL_NAME, ESectionType.String),
+            new SectionInfo(ESectionId.MIN_ID, ESectionType.Dword),
+            new SectionInfo(ESectionId.MT_DIPLOMACY, ESectionType.Dword),
+            new SectionInfo(ESectionId.LEVER, ESectionType.Record),
+            new SectionInfo(ESectionId.UNIT_PROTOTYPE, ESectionType.String),
+            new SectionInfo(ESectionId.UNIT_LOGIC_AGRESSIV, ESectionType.Null),
+            new SectionInfo(ESectionId.UNIT_LOGIC_ALARM_CONDITION, ESectionType.Byte),
+            new SectionInfo(ESectionId.GUARD_PT, ESectionType.Record),
+            new SectionInfo(ESectionId.VSS_PATH, ESectionType.Record),
+            new SectionInfo(ESectionId.VSS_IS_USE_GROUP, ESectionType.Byte),
+            new SectionInfo(ESectionId.LIGHT_SHADOW, ESectionType.Byte),
+            new SectionInfo(ESectionId.OBJPRIMTXTR, ESectionType.String),
+            new SectionInfo(ESectionId.SOUND_MIN, ESectionType.Dword),
+            new SectionInfo(ESectionId.PARTICL_TYPE, ESectionType.Dword),
+            new SectionInfo(ESectionId.MAX_ID, ESectionType.Dword),
+            new SectionInfo(ESectionId.MT_SPELL, ESectionType.String),
+            new SectionInfo(ESectionId.LEVER_SCIENCE_STATS, ESectionType.Null),
+            new SectionInfo(ESectionId.UNIT_ITEMS, ESectionType.Null),
+            new SectionInfo(ESectionId.UNIT_LOGIC_CYCLIC, ESectionType.Byte),
+            new SectionInfo(ESectionId.UNIT_LOGIC_HELP, ESectionType.Float),
+            new SectionInfo(ESectionId.GUARD_PT_POSITION, ESectionType.Plot),
+            new SectionInfo(ESectionId.ACTION_PT, ESectionType.Record),
+            new SectionInfo(ESectionId.VSS_ID, ESectionType.Dword),
+            new SectionInfo(ESectionId.VSS_VARIABLE, ESectionType.Record),
+            new SectionInfo(ESectionId.LIGHT_COLOR, ESectionType.Plot),
+            new SectionInfo(ESectionId.OBJSECTXTR, ESectionType.String),
+            new SectionInfo(ESectionId.SOUND_MAX, ESectionType.Dword),
+            new SectionInfo(ESectionId.PARTICL_SCALE, ESectionType.Float),
+            new SectionInfo(ESectionId.AIGRAPH, ESectionType.AiGraph),
+            new SectionInfo(ESectionId.MT_AREAS, ESectionType.AreaArray),
+            new SectionInfo(ESectionId.LEVER_CUR_STATE, ESectionType.Byte),
+            new SectionInfo(ESectionId.UNIT_STATS, ESectionType.UnitStats),
+            new SectionInfo(ESectionId.UNIT_LOGIC_MODEL, ESectionType.Dword),
+            new SectionInfo(ESectionId.UNIT_LOGIC_ALWAYS_ACTIVE, ESectionType.Byte),
+            new SectionInfo(ESectionId.GUARD_PT_ACTION, ESectionType.Null),
+            new SectionInfo(ESectionId.ACTION_PT_LOOK_PT, ESectionType.Plot),
+            new SectionInfo(ESectionId.TORCH, ESectionType.Record),
+            new SectionInfo(ESectionId.VSS_RECT, ESectionType.Rectangle),
+            new SectionInfo(ESectionId.VSS_BS_CHECK, ESectionType.StringArray),
+            new SectionInfo(ESectionId.LIGHT_COMMENTS, ESectionType.String),
+            new SectionInfo(ESectionId.OBJPOSITION, ESectionType.Plot),
+            new SectionInfo(ESectionId.SOUND_COMMENTS, ESectionType.String),
+            new SectionInfo(ESectionId.MT_TARGETS, ESectionType.Plot2DArray),
+            new SectionInfo(ESectionId.LEVER_TOTAL_STATE, ESectionType.Byte),
+            new SectionInfo(ESectionId.UNIT_QUEST_ITEMS, ESectionType.StringArray),
+            new SectionInfo(ESectionId.UNIT_LOGIC_GUARD_R, ESectionType.Float),
+            new SectionInfo(ESectionId.UNIT_LOGIC_AGRESSION_MODE, ESectionType.Byte),
+            new SectionInfo(ESectionId.ACTION_PT_WAIT_SEG, ESectionType.Dword),
+            new SectionInfo(ESectionId.TORCH_STRENGHT, ESectionType.Float),
+            new SectionInfo(ESectionId.VSS_SRC_ID, ESectionType.Dword),
+            new SectionInfo(ESectionId.SOUND_VOLUME, ESectionType.Null),
+            new SectionInfo(ESectionId.MT_CAST_INTERVAL, ESectionType.Dword),
+            new SectionInfo(ESectionId.LEVER_IS_CYCLED, ESectionType.Byte),
+            new SectionInfo(ESectionId.UNIT_QUICK_ITEMS, ESectionType.StringArray),
+            new SectionInfo(ESectionId.UNIT_LOGIC_GUARD_PT, ESectionType.Plot),
+            new SectionInfo(ESectionId.ACTION_PT_TURN_SPEED, ESectionType.Dword),
+            new SectionInfo(ESectionId.TORCH_PTLINK, ESectionType.Plot),
+            new SectionInfo(ESectionId.VSS_DST_ID, ESectionType.Dword),
+            new SectionInfo(ESectionId.LEVER_CAST_ONCE, ESectionType.Byte),
+            new SectionInfo(ESectionId.UNIT_SPELLS, ESectionType.StringArray),
+            new SectionInfo(ESectionId.UNIT_LOGIC_NALARM, ESectionType.Byte),
+            new SectionInfo(ESectionId.ACTION_PT_FLAGS, ESectionType.Byte),
+            new SectionInfo(ESectionId.TORCH_SOUND, ESectionType.String),
+            new SectionInfo(ESectionId.VSS_TITLE, ESectionType.String),
+            new SectionInfo(ESectionId.LEVER_SCIENCE_STATS_NEW, ESectionType.LeverStats),
+            new SectionInfo(ESectionId.UNIT_WEAPONS, ESectionType.StringArray),
+            new SectionInfo(ESectionId.UNIT_LOGIC_USE, ESectionType.Byte),
+            new SectionInfo(ESectionId.VSS_COMMANDS, ESectionType.String),
+            new SectionInfo(ESectionId.DIRICTORY_ELEMENTS, ESectionType.Record),
+            new SectionInfo(ESectionId.LEVER_IS_DOOR, ESectionType.Byte),
+            new SectionInfo(ESectionId.UNIT_ARMORS, ESectionType.StringArray),
+            new SectionInfo(ESectionId.UNIT_LOGIC_REVENGE, ESectionType.Null),
+            new SectionInfo(ESectionId.DIRICTORY, ESectionType.Record),
+            new SectionInfo(ESectionId.SS_TEXT_OLD, ESectionType.String),
+            new SectionInfo(ESectionId.LEVER_RECALC_GRAPH, ESectionType.Byte),
+            new SectionInfo(ESectionId.UNIT_LOGIC_FEAR, ESectionType.Null),
+            new SectionInfo(ESectionId.SC_OBJECTDBFILE, ESectionType.Null),
+            new SectionInfo(ESectionId.FOLDER, ESectionType.Record),
+            new SectionInfo(ESectionId.SS_TEXT, ESectionType.StringEncrypted)
         };
     }
 
@@ -533,7 +555,10 @@ namespace EILib
 
     public enum ESectionId : uint
     {
+        // Fake useful sections
+        ROOT = 0x0,
         UNKNOWN = 0xFFFFFFFF,
+
         WORLD_SET = 0x0000ABD0,
         OBJ_DEF_LOGIC = 0x0000B010,
         PR_OBJECTDBFILE = 0x0000D000,
