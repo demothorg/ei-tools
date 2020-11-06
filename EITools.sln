@@ -1,6 +1,8 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30611.23
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EILib", "src\EILib\EILib.csproj", "{F9082C79-924F-4CA8-B12A-0CF5496B4CAF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "eipacker", "src\eipacker\eipacker.csproj", "{5DBB91A7-7141-4AA2-B215-268E45E88BBD}"
@@ -10,6 +12,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SetMenuPositions", "src\SetMenuPositions\SetMenuPositions.csproj", "{6CDA58B6-484A-4E73-88EE-ED2D7E292BFA}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LnkEditor", "src\LnkEditor\LnkEditor.csproj", "{71E8F798-E2BA-4B12-9325-F4BDBBEA2ECB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LiaMprFix", "src\LiaMpFix\LiaMprFix.csproj", "{B2D1EC80-E684-4170-BAAD-FF4FF38D08E0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -37,8 +41,15 @@ Global
 		{71E8F798-E2BA-4B12-9325-F4BDBBEA2ECB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{71E8F798-E2BA-4B12-9325-F4BDBBEA2ECB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{71E8F798-E2BA-4B12-9325-F4BDBBEA2ECB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B2D1EC80-E684-4170-BAAD-FF4FF38D08E0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B2D1EC80-E684-4170-BAAD-FF4FF38D08E0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B2D1EC80-E684-4170-BAAD-FF4FF38D08E0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B2D1EC80-E684-4170-BAAD-FF4FF38D08E0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {44C52BF9-3130-4316-9FC8-FA952F756766}
 	EndGlobalSection
 EndGlobal
