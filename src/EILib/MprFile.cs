@@ -27,7 +27,20 @@ namespace EILib
             using (var f = new FileStream(path, FileMode.Open))
             {
                 var files = ResFile.GetFiles(f);
-                string zoneName = Path.GetFileNameWithoutExtension(path);
+
+                string zoneName = "";
+                foreach (var resItem in files)
+                {
+                    if (resItem.Key.EndsWith(".mp", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (zoneName != "")
+                            throw new InvalidDataException("MPR file contains multiple .MP-files");
+                        zoneName = Path.GetFileNameWithoutExtension(resItem.Key);
+                    }
+                }
+
+                if (zoneName == "")
+                    throw new InvalidDataException("MPR file doesn't contain any .MP-file");
 
                 // Load .mp file
                 var mpFileEntry = files[zoneName + ".mp"];
